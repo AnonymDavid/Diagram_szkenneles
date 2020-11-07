@@ -40,7 +40,6 @@ def getIntersectionLines(pt, lines, threshold):
 
 def getIntersectionEndpoints(ISidx, intersections, lines, endpoints, threshold, inspectedIS = []):
     iln = getIntersectionLines(intersections[ISidx][0], lines, threshold)
-    
     ep = []
     for i in range(len(iln)):
         if iln[i][1] == 0:
@@ -58,9 +57,10 @@ def getIntersectionEndpoints(ISidx, intersections, lines, endpoints, threshold, 
                 x = 0
                 while x < len(inspectedIS) and not inspectedIS[x] == i:
                     x += 1
-                if x<len(inspectedIS):
-                    epTemp, inspectedIS = getIntersectionEndpoints(otherSide, intersections, lines, endpoints, threshold, inspectedIS)
-                    ep.append(epTemp)
+                if x < len(inspectedIS):
+                    epTemp, inspectedIS = getIntersectionEndpoints(isIntersection(otherSide, intersections, threshold), intersections, lines, endpoints, threshold, inspectedIS)
+                    for e in epTemp:
+                        ep.append(e)
                     otherSide = (-1, -1)
             elif not j == otherSideLineIdx:
                 if pointsClose(lines[j][0], otherSide, threshold):
@@ -77,7 +77,8 @@ def getIntersectionEndpoints(ISidx, intersections, lines, endpoints, threshold, 
             y = 0
             while y < len(endpoints) and not endpoints[y][0] == otherSide:
                 y += 1
-            ep.append(otherSide)
+            if y < len(endpoints):
+                ep.append(otherSide)
     
     inspectedIS.append(ISidx)
     
@@ -110,7 +111,7 @@ def getOrientationValues(orientation):
 
 
 # read, make it black and white
-img = cv2.imread("tests/test4.jpg")
+img = cv2.imread("tests/test7.jpg")
 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)[1]
 
@@ -246,6 +247,26 @@ verticalStructure = cv2.getStructuringElement(cv2.MORPH_RECT, (1, verticalsize))
 vertical = cv2.erode(vertical, verticalStructure)
 vertical = cv2.dilate(vertical, verticalStructure)
 
+horizontalKernel = np.array([
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],
+    [1, 1, 1, 1, 1],
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0],], dtype = np.uint8)
+
+verticalKernel = np.array([
+    [0, 0, 1, 0, 0],
+    [0, 0, 1, 0, 0],
+    [0, 0, 1, 0, 0],
+    [0, 0, 1, 0, 0],
+    [0, 0, 1, 0, 0],], dtype = np.uint8)
+
+horizontalTemp = cv2.dilate(horizontal, horizontalKernel)
+verticalTemp = cv2.dilate(vertical, verticalKernel)
+
+vertical = cv2.subtract(vertical, horizontalTemp)
+horizontal = cv2.subtract(horizontal, verticalTemp)
+
 lines_img = cv2.add(horizontal, vertical)
 
 lines = []
@@ -260,7 +281,7 @@ for cnt in contours:
     lines.append([(x-1,y),(x+w+1,y)])
 
 contours, hierarchy = cv2.findContours(vertical, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
+
 for cnt in contours:
     peri = cv2.arcLength(cnt, True)
     approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
@@ -325,8 +346,10 @@ for i in range(len(intersections)):
     if x == len(inspectedIS):
         ep, inspectedIS = getIntersectionEndpoints(i, intersections, lines, endpoints, closeThresh, inspectedIS)
         ISep.append(ep)
+        print(ep)
 
-print(ISep)
+for i in ISep:
+    print(i)
 fullLines = []
 for i in range(len(endpoints)):
     y = 0
@@ -442,7 +465,7 @@ for e in intersections:
 
 for l in lines:
     cv2.line(img, (l[0]), (l[1]), (0,0,255),1)
-
+'''
 
 
 # creating xml file for draw.io
@@ -489,9 +512,11 @@ file.write('</root>\n</mxGraphModel>\n')
 
 file.close()
 
-cv2.imshow("img", img)
+
 cv2.imshow("arrows", arrowheads)
 cv2.imshow("fullcnt", fullcontours)
+'''
+cv2.imshow("img", img)
 
 cv2.waitKey()
 cv2.destroyAllWindows()
