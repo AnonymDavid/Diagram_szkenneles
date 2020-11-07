@@ -346,10 +346,7 @@ for i in range(len(intersections)):
     if x == len(inspectedIS):
         ep, inspectedIS = getIntersectionEndpoints(i, intersections, lines, endpoints, closeThresh, inspectedIS)
         ISep.append(ep)
-        print(ep)
 
-for i in ISep:
-    print(i)
 fullLines = []
 for i in range(len(endpoints)):
     y = 0
@@ -441,13 +438,8 @@ for i in range(len(ISep)):
             ee = 0
             while ee < len(endpoints) and not endpoints[ee][0] == ISep[i][e]:
                 ee += 1
-            print("lengths: ", len(endpoints), es, ee, s, e)
-            print("halis")
-            print(ISep[i][s], ISep[i][e], 1, endpoints[es][2], endpoints[ee][2], endpoints[es][3], endpoints[ee][3])
+                
             fullLines.append([ISep[i][s], ISep[i][e], 1, endpoints[es][2], endpoints[ee][2], endpoints[es][3], endpoints[ee][3]])
-
-print(ISArrowStarts)
-print(ISArrowEnds)
 
 for l in fullLines:
     if l[2] == 0:
@@ -465,7 +457,7 @@ for e in intersections:
 
 for l in lines:
     cv2.line(img, (l[0]), (l[1]), (0,0,255),1)
-'''
+
 
 
 # creating xml file for draw.io
@@ -513,10 +505,11 @@ file.write('</root>\n</mxGraphModel>\n')
 file.close()
 
 
-cv2.imshow("arrows", arrowheads)
+cv2.imshow("lines", lines_img)
 cv2.imshow("fullcnt", fullcontours)
-'''
 cv2.imshow("img", img)
+
+print("DONE")
 
 cv2.waitKey()
 cv2.destroyAllWindows()
