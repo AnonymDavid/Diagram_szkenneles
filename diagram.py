@@ -111,7 +111,7 @@ def getOrientationValues(orientation):
 
 
 # read, make it black and white
-img = cv2.imread("tests/test7.jpg")
+img = cv2.imread("tests/test10.jpg")
 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)[1]
 
@@ -357,6 +357,7 @@ for i in range(len(endpoints)):
             x += 1
         if x == len(ISep[y]):
             y += 1
+            x = 0
     
     if y == len(ISep):
         e = endpoints[i]
@@ -408,14 +409,10 @@ for l in fullLines:
     
     if (cv2.countNonZero(otherArea) > cv2.countNonZero(mainArea)):
         l[2] = 1
-    
-    #cv2.rectangle(arrowheads,(l[0][0]-inspectArea, l[0][1]-inspectArea),(l[0][0]+inspectArea, l[0][1]+inspectArea),(128),1)
-    #cv2.rectangle(arrowheads,(l[1][0]-inspectArea, l[1][1]-inspectArea),(l[1][0]+inspectArea, l[1][1]+inspectArea),(128),1)
-
-ISArrowStarts = []
-ISArrowEnds = []
 
 for i in range(len(ISep)):
+    ISArrowStarts = []
+    ISArrowEnds = []
     for j in range(len(ISep[i])):
         pt = ISep[i][j]
         cv2.rectangle(img,(pt[0]-inspectArea,pt[1]-inspectArea),(pt[0]+inspectArea, pt[1]+inspectArea),(255,0,0),2)
@@ -507,6 +504,7 @@ file.close()
 
 cv2.imshow("lines", lines_img)
 cv2.imshow("fullcnt", fullcontours)
+cv2.imshow("arrowhheads", arrowheads)
 cv2.imshow("img", img)
 
 print("DONE")
