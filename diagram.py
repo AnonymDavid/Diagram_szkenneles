@@ -111,7 +111,7 @@ def getOrientationValues(orientation):
 
 
 # read, make it black and white
-img = cv2.imread("tests/test10.jpg")
+img = cv2.imread("tests/test6.jpg")
 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)[1]
 
@@ -336,7 +336,6 @@ for line in lines:
     
     lc += 1
 
-
 ISep = []
 inspectedIS = []
 for i in range(len(intersections)):
@@ -394,7 +393,9 @@ for i in range(len(endpoints)):
             fullLines.append([e[0], otherSide, 0, e[2], endpoints[y][2], e[3], endpoints[y][3]])
 
 
-arrowheads = cv2.subtract(full, fullcontours)
+arrowheads = cv2.subtract(255-thresh, fullcontours)
+
+cv2.imshow("f", full)
 
 for l in lines:
     cv2.line(arrowheads,l[0],l[1],[0,255,0],erodeCount*2)
@@ -411,18 +412,28 @@ for l in fullLines:
         l[2] = 1
 
 for i in range(len(ISep)):
+    ISArrowPixelCount = []
     ISArrowStarts = []
     ISArrowEnds = []
+    
+    avg = 0
     for j in range(len(ISep[i])):
         pt = ISep[i][j]
         cv2.rectangle(img,(pt[0]-inspectArea,pt[1]-inspectArea),(pt[0]+inspectArea, pt[1]+inspectArea),(255,0,0),2)
         
         mainArea = arrowheads[pt[1]-inspectArea:pt[1]+inspectArea, pt[0]-inspectArea:pt[0]+inspectArea]
         
-        if cv2.countNonZero(mainArea) < 2:
-            ISArrowStarts.append(j)
+        ISArrowPixelCount.append([j, cv2.countNonZero(mainArea)])
+        
+        avg += ISArrowPixelCount[-1][1]
+    
+    avg = avg / len(ISArrowPixelCount)
+    
+    for isa in ISArrowPixelCount:
+        if isa[1] < avg:
+            ISArrowStarts.append(isa[0])
         else:
-            ISArrowEnds.append(j)
+            ISArrowEnds.append(isa[0])
     
     for x in range(len(ISArrowStarts)):
         for y in range(len(ISArrowEnds)):
