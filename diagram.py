@@ -1,6 +1,5 @@
 import numpy as np
 import cv2
-import math
 
 import sys
 import os.path
@@ -91,11 +90,11 @@ def getIntersectionEndpoints(ISidx, intersections, lines, endpoints, threshold, 
 def getPointOrientation(pt, rect):
     center = (rect[0]+round(rect[2]/2), rect[1]+round(rect[3]/2))
     
-    if (pt[0] <= center[0]-5):
+    if (pt[0] <= center[0]-15):
         return 'L'
-    elif (pt[0] >= center[0]+5):
+    elif (pt[0] >= center[0]+15):
         return 'R'
-    elif (pt[1] <= center[1]-5):
+    elif (pt[1] <= center[1]-15):
         return 'T'
     else:
         return 'B'
@@ -127,7 +126,7 @@ img = cv2.imread(str(sys.argv[1]))
 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)[1]
 
-cv2.imshow("img_original", img)
+cv2.imshow("Original image", img)
 
 kernel = np.ones((5,5), np.uint8)
 crosskernel = np.array([
@@ -135,7 +134,7 @@ crosskernel = np.array([
                 [1, 1, 1],
                 [0, 1, 0]], dtype = np.uint8)
 
-# making lines stronger for easier recognition
+thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
 eroded = cv2.erode(thresh, kernel)
 
 # finding areas
@@ -185,302 +184,313 @@ for label in range(1,num_labels):
                 del(areas[-1])
             break
 
-# making full a mask for every shape and arrow
-full = thresh.copy()
 
-for area in areas:
-    cv2.drawContours(full, [area[2]], -1, 0, -1)
+isArrowdetectionSuccessful = False
 
-full = 255 - full
+try:
+    # making full a mask for every shape and arrow
+    full = thresh.copy()
+    
+    for area in areas:
+        cv2.drawContours(full, [area[2]], -1, 0, -1)
 
-full = cv2.morphologyEx(full, cv2.MORPH_CLOSE, kernel)
+    full = 255 - full
+    
+    full = cv2.morphologyEx(full, cv2.MORPH_CLOSE, kernel)
 
-# making fullcontours a mask for only the shapes (covering the outer borders)
-fullcontours = full
+    # making fullcontours a mask for only the shapes (covering the outer borders)
+    fullcontours = full
 
-# erode until there's as many contours as shapes
-contours, hierarchy = cv2.findContours(fullcontours, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-erodeCount = 0
-while not (len(contours) == len(areas)):
-    fullcontours = cv2.erode(fullcontours,crosskernel)
-    fullcontours = cv2.morphologyEx(fullcontours, cv2.MORPH_OPEN, kernel)
-    erodeCount += 1
+    # erode until there's as many contours as shapes
     contours, hierarchy = cv2.findContours(fullcontours, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-fullcontours = cv2.morphologyEx(fullcontours, cv2.MORPH_OPEN, kernel)
+    erodeCount = 0
+    while not (len(contours) == len(areas)):
+        fullcontours = cv2.erode(fullcontours,crosskernel)
+        fullcontours = cv2.morphologyEx(fullcontours, cv2.MORPH_OPEN, kernel)
+        erodeCount += 1
+        contours, hierarchy = cv2.findContours(fullcontours, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-contours, hierarchy = cv2.findContours(fullcontours, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    fullcontours = cv2.morphologyEx(fullcontours, cv2.MORPH_OPEN, kernel)
 
-# draw every contour to cover the shapes
-for cnt in contours:
-    cv2.drawContours(fullcontours, [cnt], -1, 255, -1)
-    cv2.drawContours(fullcontours, [cnt], -1, 255, (erodeCount*2))
-
-# making arrows a mask containing only the arrows
-arrows = cv2.subtract(full, fullcontours)
-
-# skeletonization
-size = np.size(arrows)
-skel = np.zeros(arrows.shape, np.uint8)
-
-element = cv2.getStructuringElement(cv2.MORPH_CROSS, (3,3))
-
-while True:
-    opened = cv2.morphologyEx(arrows, cv2.MORPH_OPEN, element)
-    temp = cv2.subtract(arrows, opened)
-    eroded = cv2.erode(arrows, element)
+    contours, hierarchy = cv2.findContours(fullcontours, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
-    skel = cv2.bitwise_or(skel,temp)
-    arrows = eroded.copy()
+    # draw every contour to cover the shapes
+    for cnt in contours:
+        cv2.drawContours(fullcontours, [cnt], -1, 255, -1)
+        cv2.drawContours(fullcontours, [cnt], -1, 255, (erodeCount*2))
     
-    if cv2.countNonZero(arrows)==0:
-        break
+    # making arrows a mask containing only the arrows
+    arrows = cv2.subtract(full, fullcontours)
 
-arrows = cv2.subtract(full, fullcontours)
+    # skeletonization
+    size = np.size(arrows)
+    skel = np.zeros(arrows.shape, np.uint8)
 
-# horizontal lines
-horizontal = np.copy(skel)
+    element = cv2.getStructuringElement(cv2.MORPH_CROSS, (3,3))
 
-cols = horizontal.shape[1]
-horizontal_size = 15
+    while True:
+        opened = cv2.morphologyEx(arrows, cv2.MORPH_OPEN, element)
+        temp = cv2.subtract(arrows, opened)
+        eroded = cv2.erode(arrows, element)
+        
+        skel = cv2.bitwise_or(skel,temp)
+        arrows = eroded.copy()
+        
+        if cv2.countNonZero(arrows)==0:
+            break
 
-horizontalStructure = cv2.getStructuringElement(cv2.MORPH_RECT, (horizontal_size, 1))
+    arrows = cv2.subtract(full, fullcontours)
 
-horizontal = cv2.erode(horizontal, horizontalStructure)
-horizontal = cv2.dilate(horizontal, horizontalStructure)
+    # horizontal lines
+    horizontal = np.copy(skel)
 
-# vertical lines
-vertical = np.copy(skel)
+    cols = horizontal.shape[1]
+    horizontal_size = 15
 
-rows = vertical.shape[0]
-verticalsize = 15
+    horizontalStructure = cv2.getStructuringElement(cv2.MORPH_RECT, (horizontal_size, 1))
 
-verticalStructure = cv2.getStructuringElement(cv2.MORPH_RECT, (1, verticalsize))
+    horizontal = cv2.erode(horizontal, horizontalStructure)
+    horizontal = cv2.dilate(horizontal, horizontalStructure)
 
-vertical = cv2.erode(vertical, verticalStructure)
-vertical = cv2.dilate(vertical, verticalStructure)
+    # vertical lines
+    vertical = np.copy(skel)
 
-# making kernels for line filtering
-horizontalKernel = np.zeros((5,5), dtype = np.uint8)
-verticalKernel = horizontalKernel.copy()
+    rows = vertical.shape[0]
+    verticalsize = 15
 
-horizontalKernel[2] = [1,1,1,1,1]
+    verticalStructure = cv2.getStructuringElement(cv2.MORPH_RECT, (1, verticalsize))
 
-for line in verticalKernel:
-    line[2] = 1
+    vertical = cv2.erode(vertical, verticalStructure)
+    vertical = cv2.dilate(vertical, verticalStructure)
 
-# get rid of intersection pixels
-horizontalTemp = cv2.dilate(horizontal, horizontalKernel)
-verticalTemp = cv2.dilate(vertical, verticalKernel)
+    # making kernels for line filtering
+    horizontalKernel = np.zeros((5,5), dtype = np.uint8)
+    verticalKernel = horizontalKernel.copy()
 
-vertical = cv2.subtract(vertical, horizontalTemp)
-horizontal = cv2.subtract(horizontal, verticalTemp)
+    horizontalKernel[2] = [1,1,1,1,1]
 
-# finding the coordinates of the lines
-lines = []
+    for line in verticalKernel:
+        line[2] = 1
+
+    # get rid of intersection pixels
+    horizontalTemp = cv2.dilate(horizontal, horizontalKernel)
+    verticalTemp = cv2.dilate(vertical, verticalKernel)
+
+    vertical = cv2.subtract(vertical, horizontalTemp)
+    horizontal = cv2.subtract(horizontal, verticalTemp)
+
+    # finding the coordinates of the lines
+    lines = []
 
     # horizontal
-contours, hierarchy = cv2.findContours(horizontal, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, hierarchy = cv2.findContours(horizontal, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-for cnt in contours:
-    peri = cv2.arcLength(cnt, True)
-    approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
-    
-    x, y, w, h = cv2.boundingRect(approx)
-    
-    lines.append([(x-1,y),(x+w+1,y)])
+    for cnt in contours:
+        peri = cv2.arcLength(cnt, True)
+        approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
+        
+        x, y, w, h = cv2.boundingRect(approx)
+        
+        lines.append([(x-1,y),(x+w+1,y)])
 
     # vertical
-contours, hierarchy = cv2.findContours(vertical, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, hierarchy = cv2.findContours(vertical, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-for cnt in contours:
-    peri = cv2.arcLength(cnt, True)
-    approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
-    
-    x, y, w, h = cv2.boundingRect(approx)
-    
-    lines.append([(x,y-1),(x,y+h+1)])
-
-# finding endpoints and intersections
-closeThresh = 30
-endpoints = []
-intersections = []
-
-lc = 0
-for line in lines:
-    ac = 0
-    for area in areas:
-        if pointCloseToRect(line[0], area[0], closeThresh):
-            endpoints.append([line[0], lc, ac, getPointOrientation(line[0],area[0])])
+    for cnt in contours:
+        peri = cv2.arcLength(cnt, True)
+        approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
         
-        if pointCloseToRect(line[1], area[0], closeThresh):
-            endpoints.append([line[1], lc, ac, getPointOrientation(line[1],area[0])])
+        x, y, w, h = cv2.boundingRect(approx)
+        
+        lines.append([(x,y-1),(x,y+h+1)])
 
-        ac += 1
-    
-    IcontainsS = False
-    IcontainsE = False
-    for i in intersections:
-        if (not IcontainsS) and pointsClose(line[0], i[0], closeThresh):
-            IcontainsS = True
-        if (not IcontainsE) and pointsClose(line[1], i[0], closeThresh):
-            IcontainsE = True
-    
-    intersectCountS = 1
-    intersectCountE = 1
-    for line2 in lines:
-        if line != line2:
-            if (not IcontainsS):
-                if (pointsClose(line[0],line2[0],closeThresh)):
-                    intersectCountS += 1
-                elif (pointsClose(line[0],line2[1],closeThresh)):
-                    intersectCountS += 1
-            if (not IcontainsE):
-                if (pointsClose(line[1],line2[0],closeThresh)):
-                    intersectCountE += 1
-                elif (pointsClose(line[1],line2[1],closeThresh)):
-                    intersectCountE += 1
-    
-    if intersectCountS > 2:
-        intersections.append([line[0], intersectCountS])
-    if intersectCountE > 2:
-        intersections.append([line[1], intersectCountE])
-    
-    lc += 1
+    # finding endpoints and intersections
+    closeThresh = 30
+    endpoints = []
+    intersections = []
 
-# getting every endpoint connected to the intersections
-ISep = [] # intersetion endpoints
-inspectedIS = []
-for i in range(len(intersections)):
-    x = 0
-    while x < len(inspectedIS) and not inspectedIS[x] == i:
-        x += 1
-    if x == len(inspectedIS):
-        ep, inspectedIS = getIntersectionEndpoints(i, intersections, lines, endpoints, closeThresh, inspectedIS)
-        ISep.append(ep)
+    lc = 0
+    for line in lines:
+        ac = 0
+        for area in areas:
+            if pointCloseToRect(line[0], area[0], closeThresh):
+                endpoints.append([line[0], lc, ac, getPointOrientation(line[0],area[0])])
+            
+            if pointCloseToRect(line[1], area[0], closeThresh):
+                endpoints.append([line[1], lc, ac, getPointOrientation(line[1],area[0])])
 
-# finding every final lines (from shape to shape) except ones that pass intersection
-fullLines = []
-for i in range(len(endpoints)):
-    y = 0
-    x = 0
-    while y < len(ISep) and not ISep[y][x] == endpoints[i][0]:
+            ac += 1
+        
+        IcontainsS = False
+        IcontainsE = False
+        for i in intersections:
+            if (not IcontainsS) and pointsClose(line[0], i[0], closeThresh):
+                IcontainsS = True
+            if (not IcontainsE) and pointsClose(line[1], i[0], closeThresh):
+                IcontainsE = True
+        
+        intersectCountS = 1
+        intersectCountE = 1
+        for line2 in lines:
+            if line != line2:
+                if (not IcontainsS):
+                    if (pointsClose(line[0],line2[0],closeThresh)):
+                        intersectCountS += 1
+                    elif (pointsClose(line[0],line2[1],closeThresh)):
+                        intersectCountS += 1
+                if (not IcontainsE):
+                    if (pointsClose(line[1],line2[0],closeThresh)):
+                        intersectCountE += 1
+                    elif (pointsClose(line[1],line2[1],closeThresh)):
+                        intersectCountE += 1
+        
+        if intersectCountS > 2:
+            intersections.append([line[0], intersectCountS])
+        if intersectCountE > 2:
+            intersections.append([line[1], intersectCountE])
+        
+        lc += 1
+
+    # getting every endpoint connected to the intersections
+    ISep = [] # intersetion endpoints
+    inspectedIS = []
+    for i in range(len(intersections)):
         x = 0
-        while x < len(ISep[y]) and not ISep[y][x] == endpoints[i][0]:
+        while x < len(inspectedIS) and not inspectedIS[x] == i:
             x += 1
-        if x == len(ISep[y]):
-            y += 1
+        if x == len(inspectedIS):
+            ep, inspectedIS = getIntersectionEndpoints(i, intersections, lines, endpoints, closeThresh, inspectedIS)
+            ISep.append(ep)
+
+    # finding every final lines (from shape to shape) except ones that pass intersection
+    fullLines = []
+    for i in range(len(endpoints)):
+        y = 0
+        x = 0
+        while y < len(ISep) and not ISep[y][x] == endpoints[i][0]:
             x = 0
-    
-    if y == len(ISep):
-        e = endpoints[i]
-        
-        if lines[e[1]][0] == e[0]:
-            otherSide = lines[e[1]][1]
-        else:
-            otherSide = lines[e[1]][0]
-        
-        otherSideLineIdx = e[1]
-        
-        j = 0
-        while j < len(lines):
-            if not j == otherSideLineIdx:
-                if pointsClose(lines[j][0], otherSide, closeThresh):
-                    otherSide = lines[j][1]
-                    otherSideLineIdx = j
-                    j = -1
-                elif pointsClose(lines[j][1], otherSide, closeThresh):
-                    otherSide = lines[j][0]
-                    otherSideLineIdx = j
-                    j = -1
-            
-            j += 1
-        
-        x = 0
-        while x < len(fullLines) and (not fullLines[x][0] == otherSide or not fullLines[x][1] == e[0]):
-            x += 1
-        
-        if x == len(fullLines):
-            y = 0
-            while y < len(endpoints) and not endpoints[y][0] == otherSide:
+            while x < len(ISep[y]) and not ISep[y][x] == endpoints[i][0]:
+                x += 1
+            if x == len(ISep[y]):
                 y += 1
-            fullLines.append([e[0], otherSide, 0, e[2], endpoints[y][2], e[3], endpoints[y][3]])
-
-# finding every arrowhead
-arrowheads = cv2.subtract(255-thresh, fullcontours)
-
-for l in lines:
-    cv2.line(arrowheads,l[0],l[1],[0,255,0],erodeCount*2)
-
-
-# figuring out the direction of the arrow
-inspectArea = 12
-
-arrowheads = cv2.threshold(arrowheads, 240, 255, cv2.THRESH_BINARY)[1]
-
-# simple lines
-for l in fullLines:
-    mainArea = arrowheads[l[0][1]-inspectArea:l[0][1]+inspectArea, l[0][0]-inspectArea:l[0][0]+inspectArea]
-    otherArea = arrowheads[l[1][1]-inspectArea:l[1][1]+inspectArea, l[1][0]-inspectArea:l[1][0]+inspectArea]
-    
-    if (cv2.countNonZero(otherArea) > cv2.countNonZero(mainArea)):
-        l[2] = 1
-
-# intersection lines
-for i in range(len(ISep)):
-    ISArrowPixelCount = []
-    ISArrowStarts = []
-    ISArrowEnds = []
-    
-    avg = 0
-    for j in range(len(ISep[i])):
-        pt = ISep[i][j]
-        cv2.rectangle(img,(pt[0]-inspectArea,pt[1]-inspectArea),(pt[0]+inspectArea, pt[1]+inspectArea),(255,0,0),2)
+                x = 0
         
-        mainArea = arrowheads[pt[1]-inspectArea:pt[1]+inspectArea, pt[0]-inspectArea:pt[0]+inspectArea]
-        
-        ISArrowPixelCount.append([j, cv2.countNonZero(mainArea)])
-        
-        avg += ISArrowPixelCount[-1][1]
-    
-    avg = avg / len(ISArrowPixelCount)
-    
-    for isa in ISArrowPixelCount:
-        if isa[1] < avg:
-            ISArrowStarts.append(isa[0])
-        else:
-            ISArrowEnds.append(isa[0])
-    
-    for x in range(len(ISArrowStarts)):
-        for y in range(len(ISArrowEnds)):
-            s = ISArrowStarts[x]
-            e = ISArrowEnds[y]
+        if y == len(ISep):
+            e = endpoints[i]
             
-            es = 0
-            while es < len(endpoints) and not endpoints[es][0] == ISep[i][s]:
-                es += 1
-            ee = 0
-            while ee < len(endpoints) and not endpoints[ee][0] == ISep[i][e]:
-                ee += 1
+            if lines[e[1]][0] == e[0]:
+                otherSide = lines[e[1]][1]
+            else:
+                otherSide = lines[e[1]][0]
             
-            fullLines.append([ISep[i][s], ISep[i][e], 1, endpoints[es][2], endpoints[ee][2], endpoints[es][3], endpoints[ee][3]])
+            otherSideLineIdx = e[1]
+            
+            j = 0
+            while j < len(lines):
+                if not j == otherSideLineIdx:
+                    if pointsClose(lines[j][0], otherSide, closeThresh):
+                        otherSide = lines[j][1]
+                        otherSideLineIdx = j
+                        j = -1
+                    elif pointsClose(lines[j][1], otherSide, closeThresh):
+                        otherSide = lines[j][0]
+                        otherSideLineIdx = j
+                        j = -1
+                
+                j += 1
+            
+            x = 0
+            while x < len(fullLines) and (not fullLines[x][0] == otherSide or not fullLines[x][1] == e[0]):
+                x += 1
+            
+            if x == len(fullLines):
+                y = 0
+                while y < len(endpoints) and not endpoints[y][0] == otherSide:
+                    y += 1
+                fullLines.append([e[0], otherSide, 0, e[2], endpoints[y][2], e[3], endpoints[y][3]])
+
+    # finding every arrowhead
+    arrowheads = cv2.subtract(255-thresh, fullcontours)
+    
+    for l in lines:
+        cv2.line(arrowheads,l[0],l[1],0,erodeCount*2)
+
+    # figuring out the direction of the arrow
+    inspectArea = 12
+
+    arrowheads = cv2.threshold(arrowheads, 240, 255, cv2.THRESH_BINARY)[1]
+
+    # simple lines
+    for l in fullLines:
+        mainArea = arrowheads[l[0][1]-inspectArea:l[0][1]+inspectArea, l[0][0]-inspectArea:l[0][0]+inspectArea]
+        otherArea = arrowheads[l[1][1]-inspectArea:l[1][1]+inspectArea, l[1][0]-inspectArea:l[1][0]+inspectArea]
+        
+        if (cv2.countNonZero(otherArea) > cv2.countNonZero(mainArea)):
+            l[2] = 1
+
+    # intersection lines
+    for i in range(len(ISep)):
+        ISArrowPixelCount = []
+        ISArrowStarts = []
+        ISArrowEnds = []
+        
+        avg = 0
+        for j in range(len(ISep[i])):
+            pt = ISep[i][j]
+            
+            mainArea = arrowheads[pt[1]-inspectArea:pt[1]+inspectArea, pt[0]-inspectArea:pt[0]+inspectArea]
+            
+            ISArrowPixelCount.append([j, cv2.countNonZero(mainArea)])
+            
+            avg += ISArrowPixelCount[-1][1]
+        
+        avg = avg / len(ISArrowPixelCount)
+        
+        for isa in ISArrowPixelCount:
+            if isa[1] < avg:
+                ISArrowStarts.append(isa[0])
+            else:
+                ISArrowEnds.append(isa[0])
+        
+        for x in range(len(ISArrowStarts)):
+            for y in range(len(ISArrowEnds)):
+                s = ISArrowStarts[x]
+                e = ISArrowEnds[y]
+                
+                es = 0
+                while es < len(endpoints) and not endpoints[es][0] == ISep[i][s]:
+                    es += 1
+                ee = 0
+                while ee < len(endpoints) and not endpoints[ee][0] == ISep[i][e]:
+                    ee += 1
+                
+                fullLines.append([ISep[i][s], ISep[i][e], 1, endpoints[es][2], endpoints[ee][2], endpoints[es][3], endpoints[ee][3]])
+    
+    isArrowdetectionSuccessful = True
+except:
+    isArrowdetectionSuccessful = False
+    print("Arrow detection failed")
 
 # drawing elements to the output window
-for l in fullLines:
-    if l[2] == 0:
-        cv2.arrowedLine(img, (l[1]), (l[0]), (255,0,255),3)
-    else:
-        cv2.arrowedLine(img, (l[0]), (l[1]), (255,0,255),3)
+for area in areas:
+    cv2.rectangle(img,(area[0][0],area[0][1]),(area[0][0]+area[0][2], area[0][1]+area[0][3]),(0,255,0),2)
 
-for e in endpoints:
-    cv2.rectangle(img,(e[0][0]-2,e[0][1]-2),(e[0][0]+4, e[0][1]+4),(0,255,0),2)
+if isArrowdetectionSuccessful:
+    for l in fullLines:
+        if l[2] == 0:
+            cv2.arrowedLine(img, (l[1]), (l[0]), (255,0,255),3)
+        else:
+            cv2.arrowedLine(img, (l[0]), (l[1]), (255,0,255),3)
 
-for e in intersections:
-    cv2.rectangle(img,(e[0][0]-2,e[0][1]-2),(e[0][0]+4, e[0][1]+4),(255,0,255),2)
+    for e in endpoints:
+        cv2.rectangle(img,(e[0][0]-2,e[0][1]-2),(e[0][0]+4, e[0][1]+4),(0,255,0),2)
 
-for l in lines:
-    cv2.line(img, (l[0]), (l[1]), (0,0,255),1)
+    for e in intersections:
+        cv2.rectangle(img,(e[0][0]-5,e[0][1]-5),(e[0][0]+10, e[0][1]+10),(255,0,0),3)
+
+    for l in lines:
+        cv2.line(img, (l[0]), (l[1]), (0,0,255),1)
 
 
 # creating xml file (output.xml) for draw.io
@@ -512,25 +522,25 @@ for area in areas:
 
     id += 1
 
-
 # lines
-for l in fullLines:
-    if l[2] == 0:
-        exitX, exitY = getOrientationValues(l[6])
-        entryX, entryY = getOrientationValues(l[5])
-        file.write('<mxCell id="'+str(id)+'" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX='+str(exitX)+';exitY='+str(exitY)+';exitDx=0;exitDy=0;entryX='+str(entryX)+';entryY='+str(entryY)+';entryDx=0;entryDy=0;" edge="1" parent="1" source="'+str(l[4]+2)+'" target="'+str(l[3]+2)+'">\n<mxGeometry relative="1" as="geometry" />\n</mxCell>\n')
-    else:
-        exitX, exitY = getOrientationValues(l[5])
-        entryX, entryY = getOrientationValues(l[6])
-        file.write('<mxCell id="'+str(id)+'" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX='+str(exitX)+';exitY='+str(exitY)+';exitDx=0;exitDy=0;entryX='+str(entryX)+';entryY='+str(entryY)+';entryDx=0;entryDy=0;" edge="1" parent="1" source="'+str(l[3]+2)+'" target="'+str(l[4]+2)+'">\n<mxGeometry relative="1" as="geometry" />\n</mxCell>\n')
-    
-    id += 1
+if isArrowdetectionSuccessful:
+    for l in fullLines:
+        if l[2] == 0:
+            exitX, exitY = getOrientationValues(l[6])
+            entryX, entryY = getOrientationValues(l[5])
+            file.write('<mxCell id="'+str(id)+'" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX='+str(exitX)+';exitY='+str(exitY)+';exitDx=0;exitDy=0;entryX='+str(entryX)+';entryY='+str(entryY)+';entryDx=0;entryDy=0;" edge="1" parent="1" source="'+str(l[4]+2)+'" target="'+str(l[3]+2)+'">\n<mxGeometry relative="1" as="geometry" />\n</mxCell>\n')
+        else:
+            exitX, exitY = getOrientationValues(l[5])
+            entryX, entryY = getOrientationValues(l[6])
+            file.write('<mxCell id="'+str(id)+'" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX='+str(exitX)+';exitY='+str(exitY)+';exitDx=0;exitDy=0;entryX='+str(entryX)+';entryY='+str(entryY)+';entryDx=0;entryDy=0;" edge="1" parent="1" source="'+str(l[3]+2)+'" target="'+str(l[4]+2)+'">\n<mxGeometry relative="1" as="geometry" />\n</mxCell>\n')
+        
+        id += 1
 
 file.write('</root>\n</mxGraphModel>\n')
 
 file.close()
 
-cv2.imshow("img", img)
+cv2.imshow("Processed image", img)
 
 print("DONE")
 
